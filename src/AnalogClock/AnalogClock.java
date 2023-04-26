@@ -3,9 +3,11 @@ import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
+import javafx.collections.FXCollections;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.ToggleGroup;
@@ -19,13 +21,22 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.TimeZone;
 import java.util.Timer;
 import java.util.TimerTask;
 
 public class AnalogClock extends Application {
 
+	private VBox appRoot;
+	private StackPane clockRoot;
+	private ToggleGroup modeToggle;
+	private RadioButton toggleButtonClock;
+    private RadioButton toggleButtonWatch;
+    private javafx.scene.control.ComboBox timezoneSelector;
+     
 	private Label clockLabel;
 	private Timer stopwatchTimer;
 	private boolean paused = false;
@@ -33,14 +44,43 @@ public class AnalogClock extends Application {
 	private int minuteHand_len = 70;
 	private int hourHand_len = 50;
 	private int secondHand_len = 80;
-	
+	private Button pauseResumeButton;
     private Timeline timeline;
     Line hourHand, minuteHand, secondHand;    
+    Circle face;
+    private void set_mode(int mode) {
+    	if(mode == 1 && this.mode != 1) {
+    	   this.start_time = LocalTime.MIN;
+   		   this.mode = 1;    	
+   		   this.timeline.playFromStart();
+   		   this.paused = true;
+   		   pauseResumeButton.setText("Start");
+   		   this.stopwatchTimer = new Timer();
+   		   this.timezoneSelector.visibleProperty().set(false);
+   		   TimerTask task = new TimerTask() {    	    			
+   		       public void run()
+   		       {
+   		    	   if(!paused) {
+   		    		   start_time = start_time.plus(50, ChronoUnit.MILLIS);   		    		  
+   		    	   }
+   		       }
+   		   };   		 
+   		   
+   		   stopwatchTimer.scheduleAtFixedRate(task, 0,50);
+    	}
+    	if(mode == 0) {
+    	   this.start_time = null;
+  		   this.mode = 0;    	
+  		   this.timeline.playFromStart();
+  		   this.paused = false;
+  		   pauseResumeButton.setText("Pause");
+  		   stopwatchTimer.cancel();
+  		   this.timezoneSelector.visibleProperty().set(true);
+    	}
+    }
     
-    @Override
-    public void start(Stage stage) {
-    	 stage.setTitle("Clock / Stopwatch");
-    	 Circle face = new Circle(100, 100, 90);
+    private void initializeComponents() {
+    	 face = new Circle(100, 100, 90);
          face.setFill(Color.WHITE);
 
          hourHand = new Line(0, 0, 0, hourHand_len);
@@ -57,71 +97,66 @@ public class AnalogClock extends Application {
          
          clockLabel = new Label("0:00");
          clockLabel.setTranslateY(100);
-        StackPane root = new StackPane();
-        root.getChildren().addAll(face, hourHand, minuteHand, secondHand, clockLabel);
+        clockRoot = new StackPane();
+        clockRoot.getChildren().addAll(face, hourHand, minuteHand, secondHand, clockLabel);
 
-        Button pauseResumeButton = new Button("Pause");
-	        pauseResumeButton.setOnAction(event -> {
-	            if (!this.paused) {
-	                timeline.pause();
-	                this.paused = true;
-	                pauseResumeButton.setText(mode == 0 ? "Resume" : "Start");
-	            } else {
-	            	timeline.play();
-	            	this.paused = false;	                
-	                pauseResumeButton.setText("Pause");
-	            }
-	        });
 
-        ToggleGroup modeToggle = new ToggleGroup();
-        RadioButton toggleButtonClock = new RadioButton("Clock");
-        RadioButton toggleButtonWatch = new RadioButton("Stopwatch");
-        toggleButtonClock.setToggleGroup(modeToggle);
-        toggleButtonWatch.setToggleGroup(modeToggle);     
-        modeToggle.selectToggle(toggleButtonClock);
-        toggleButtonClock.setPrefWidth(100);
-        toggleButtonWatch.setPrefWidth(100);
+        this.pauseResumeButton = new Button("Pause");     
+        this.modeToggle = new ToggleGroup();       
+        this.toggleButtonClock = new RadioButton("Clock");
+        this.toggleButtonWatch = new RadioButton("Stopwatch");
+        this.toggleButtonClock.setToggleGroup(modeToggle);
+        this.toggleButtonWatch.setToggleGroup(modeToggle);     
+        this.modeToggle.selectToggle(toggleButtonClock);
+        this.toggleButtonClock.setPrefWidth(100);
+        this.toggleButtonWatch.setPrefWidth(100);
         
+        
+        this.timezoneSelector = new ComboBox(FXCollections.observableArrayList(TimeZone.getAvailableIDs()));
+        this.timezoneSelector.getSelectionModel().select(TimeZone.getDefault().getID());
+        this.timezoneSelector.setLayoutY(10);
+        HBox tbox = new HBox(toggleButtonClock, toggleButtonWatch);
+	    tbox.alignmentProperty().set(Pos.CENTER);
+	    
+        this.appRoot = new VBox(timezoneSelector,clockRoot, pauseResumeButton, tbox);        
+        this.appRoot.setAlignment(Pos.CENTER);
+        this.appRoot.setSpacing(20);
+
+    }
+    void initializeEvents() {
+    	
+    	pauseResumeButton.setOnAction(event -> {
+            if (!this.paused) {
+                timeline.pause();
+                this.paused = true;
+                pauseResumeButton.setText(mode == 0 ? "Resume" : "Start");
+            } else {
+            	timeline.play();
+            	this.paused = false;	                
+                pauseResumeButton.setText("Pause");
+            }
+        });
+
         
        modeToggle.selectedToggleProperty().addListener((e,o,n)->{
     	   if(n.equals(toggleButtonWatch)) {	
-    		   this.start_time = LocalTime.MIN;
-    		   this.mode = 1;    	
-    		   this.timeline.playFromStart();
-    		   this.paused = true;
-    		   pauseResumeButton.setText("Start");
-    		   this.stopwatchTimer = new Timer();
-    		   
-    		   TimerTask task = new TimerTask()
-    		   {    	    			
-    		       public void run()
-    		       {
-    		    	   if(!paused) {
-    		          start_time = start_time.plusSeconds(1);
-    		    	   }
-    		       }
-    		   };    		 
-    		   
-    		   stopwatchTimer.scheduleAtFixedRate(task, 0,1000);
+    		 set_mode(1);
     	   }
     	   else {
-    		   this.start_time = null;
-    		   this.mode = 0;    	
-    		   this.timeline.playFromStart();
-    		   this.paused = false;
-    		   pauseResumeButton.setText("Pause");
-    		   stopwatchTimer.cancel();
+    		  set_mode(0);
     	   }
        });
         
+    }
+    @Override
+    public void start(Stage stage) {
+    	stage.setTitle("Clock / Stopwatch");
+    	
+    	initializeComponents();
         
-        HBox tbox = new HBox(toggleButtonClock, toggleButtonWatch);
-	    tbox.alignmentProperty().set(Pos.CENTER);
-        VBox vbox = new VBox(root, pauseResumeButton, tbox);        
-        vbox.setAlignment(Pos.CENTER);
-        vbox.setSpacing(20);
-
-        Scene scene = new Scene(vbox, 220, 280);
+        initializeEvents();
+      
+        Scene scene = new Scene(appRoot, 250, 320);
         stage.setScene(scene);
         stage.show();
         
@@ -130,12 +165,12 @@ public class AnalogClock extends Application {
                 	LocalTime time = get_time();
                 	set_hands(time);
                                   }),
-                new KeyFrame(Duration.seconds(1))
+                new KeyFrame(Duration.millis(50))
         );
         timeline.setCycleCount(Animation.INDEFINITE);
         timeline.play();
     }
-    
+        
     public void set_hands(LocalTime time) {
     	 int hour = time.getHour() % 12;
          int minute = time.getMinute();
@@ -157,17 +192,18 @@ public class AnalogClock extends Application {
          secondHand.setTranslateX(Math.sin(Math.toRadians(secondRot))*(secondHand_len/2));
          secondHand.setTranslateY(-Math.cos(Math.toRadians(secondRot))*(secondHand_len/2));
     }
+    
     LocalTime start_time = null;    
     public LocalTime get_time() {
     	if(mode == 0) {
-    		var t = LocalTime.now().truncatedTo(ChronoUnit.SECONDS);
+    		var t = LocalTime.now(TimeZone.getTimeZone((String)timezoneSelector.getSelectionModel().getSelectedItem()).toZoneId()).truncatedTo(ChronoUnit.SECONDS);
     		this.clockLabel.setText(t.format(DateTimeFormatter.ISO_TIME));
     		return t;
     	}
-    	this.clockLabel.setText(start_time.format(DateTimeFormatter.ISO_TIME));
+    	this.clockLabel.setText(start_time.format(DateTimeFormatter.ofPattern("mm:ss.SSS")));
     	return start_time;
-    }
-     
+    }   
+    
 
     public static void main(String[] args) {
         launch();
